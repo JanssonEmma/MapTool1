@@ -1,0 +1,19 @@
+﻿<Window x:Class="MapTool1.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Map Resizer" Height="800" Width="800" SizeChanged="Window_SizeChanged">
+    <Grid>
+        <DockPanel>
+            <Menu DockPanel.Dock="Top">
+                <MenuItem Header="_File">
+                    <MenuItem Header="_Open" Click="MenuItemOpen_Click"/>
+                    <MenuItem Header="_Save" />
+                </MenuItem>
+            </Menu>
+            <TextBox AcceptsReturn="True" />
+        </DockPanel>
+        <Canvas x:Name="canvas">
+
+        </Canvas>
+    </Grid>
+</Window>
