@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Windows;
@@ -18,7 +17,7 @@ namespace MapTool1
         private double cellSize;
         private double xOffset;
         private double yOffset;
-        private Dictionary<Tuple<int, int>, string> mappedGrid = new Dictionary<Tuple<int, int>, string>();
+        private Dictionary<Tuple<int, int>, Tuple<string,string>> mappedGrid = new Dictionary<Tuple<int, int>, Tuple<string, string>>();
         public MainWindow()
         {
             InitializeComponent();
@@ -58,79 +57,81 @@ namespace MapTool1
                         
                         Canvas.SetLeft(cell, xOffset + col * cellSize);
                         Canvas.SetTop(cell, yOffset + row * cellSize);
-                        TextBlock textBlock = new TextBlock();
-                        Tuple<int, int> key = new Tuple<int, int>(row, col);
-                        if (mappedGrid.TryGetValue(key, out string value))
-                        {
-                            textBlock.Text = value;
-                        }
-                        else
-                        {
-                            textBlock.Text = "#error";
-                        }
-                        textBlock.TextAlignment = TextAlignment.Center;
-                        Canvas.SetLeft(textBlock, xOffset + col * cellSize + cell.Width / 2);
-                        Canvas.SetTop(textBlock, yOffset + row * cellSize + cell.Height / 2);
 
+                        Tuple<int, int> key = new Tuple<int, int>(row, col);
+                        if (mappedGrid.TryGetValue(key, out Tuple<string, string> value))
+                        {
+                            if (value.Item1 == value.Item2)
+                            {
+                                cell.Uid = value.Item1;
+                            }
+                            else
+                            {
+                                cell.Uid = string.Format("{0} ({1})",value.Item2,value.Item1);
+                            }
+                            
+                            cell.Fill = Brushes.LightGray;
+                            cell.MouseEnter += Cell_MouseEnter;
+                        }
                         canvas.Children.Add(cell);
-                        canvas.Children.Add(textBlock);
                     }
                 }
 
                 // Draw additional row buttons
                 var buttonBeforeFirstRow = new Button()
                 {
-                    Width = cellSize * columns,
-                    Height = cellSize / 2,
+                    Width = cellSize * columns - 20,
+                    Height = 20,
                     Content = "+",
                     FontSize = 16,
-                    Background = Brushes.DarkGray,
+                    Background = Brushes.CornflowerBlue,
                     BorderThickness = new Thickness(0),
                     HorizontalContentAlignment = HorizontalAlignment.Center,
                     VerticalContentAlignment = VerticalAlignment.Center
                 };
-                Canvas.SetLeft(buttonBeforeFirstRow, xOffset);
-                Canvas.SetTop(buttonBeforeFirstRow, yOffset - cellSize / 2);
+                Canvas.SetLeft(buttonBeforeFirstRow, xOffset + 20);
+                Canvas.SetTop(buttonBeforeFirstRow, yOffset - 20);
                 canvas.Children.Add(buttonBeforeFirstRow);
 
                 var buttonAfterLastRow = new Button()
                 {
-                    Width = cellSize * columns,
-                    Height = cellSize / 2,
+                    Width = cellSize * columns - 20,
+                    Height = 20,
                     Content = "+",
                     FontSize = 16,
-                    Background = Brushes.DarkGray,
+                    Background = Brushes.CornflowerBlue,
                     BorderThickness = new Thickness(0),
                     HorizontalContentAlignment = HorizontalAlignment.Center,
                     VerticalContentAlignment = VerticalAlignment.Center
                 };
-                Canvas.SetLeft(buttonAfterLastRow, xOffset);
+                Canvas.SetLeft(buttonAfterLastRow, xOffset + 20);
                 Canvas.SetTop(buttonAfterLastRow, yOffset + (rows * cellSize));
                 canvas.Children.Add(buttonAfterLastRow);
 
                 // Draw additional column buttons
                 var buttonFirstColumn = new Button()
                 {
-                    Width = cellSize / 2,
+                    Width = 20,
                     Height = cellSize * rows,
                     Content = "+",
                     FontSize = 16,
-                    Background = Brushes.DarkGray,
+                    Background = Brushes.CornflowerBlue,
                     BorderThickness = new Thickness(0),
                     HorizontalContentAlignment = HorizontalAlignment.Center,
                     VerticalContentAlignment = VerticalAlignment.Center
                 };
-                Canvas.SetLeft(buttonFirstColumn, xOffset - cellSize / 2);
+                buttonFirstColumn.Click += FirstColumnButton_Click;
+                Canvas.SetLeft(buttonFirstColumn, xOffset);
                 Canvas.SetTop(buttonFirstColumn, yOffset);
                 canvas.Children.Add(buttonFirstColumn);
 
                 var buttonLastColumn = new Button()
                 {
-                    Width = cellSize / 2,
+                    Width = 20,
                     Height = cellSize * rows,
                     Content = "+",
                     FontSize = 16,
-                    Background = Brushes.DarkGray,
+                    Background = Brushes.CornflowerBlue,
                     BorderThickness = new Thickness(0),
                     HorizontalContentAlignment = HorizontalAlignment.Center,
                     VerticalContentAlignment = VerticalAlignment.Center,
@@ -140,6 +141,16 @@ namespace MapTool1
                 Canvas.SetTop(buttonLastColumn, yOffset);
                 canvas.Children.Add(buttonLastColumn);
             }
+        }
+
+        private void Cell_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            Rectangle s = (Rectangle)sender;
+            ToolTip cellToolTip = new ToolTip();
+            cellToolTip.Content = s.Uid;
+            cellToolTip.Placement = System.Windows.Controls.Primitives.PlacementMode.Center;
+            s.ToolTip = cellToolTip;
+            
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -164,7 +175,9 @@ namespace MapTool1
 
         private void FirstColumnButton_Click(object sender, RoutedEventArgs e)
         {
-            // Handle first column button click event
+            columns++;
+            MoveGridColumns();
+            DrawGrid(rows, columns);
         }
 
         private void LastColumnButton_Click(object sender, RoutedEventArgs e)
@@ -216,13 +229,37 @@ namespace MapTool1
                         maxColumnIndex = Math.Max(maxColumnIndex, columnIndex);
                         maxRowIndex = Math.Max(maxRowIndex, rowIndex);
 
-                        mappedGrid.Add(Tuple.Create(rowIndex, columnIndex), element);
+                        mappedGrid.Add(Tuple.Create(rowIndex, columnIndex), Tuple.Create(element,element));
                     }
                 }
                 columns = maxColumnIndex + 1;
                 rows = maxRowIndex + 1;
                 DrawGrid(rows, columns);
             }
+        }
+
+        private void MoveGridColumns()
+        {
+            Dictionary<Tuple<int, int>, Tuple<string,string>> newMappedGrid = new Dictionary<Tuple<int, int>, Tuple<string, string>>();
+            foreach (Tuple<int, int> key in mappedGrid.Keys)
+            {
+                mappedGrid.TryGetValue(key, out Tuple<string,string> value);
+                newMappedGrid.Add(Tuple.Create(key.Item1, key.Item2 + 1), Tuple.Create(value.Item1, GetFolderName(key.Item1,key.Item2 + 1)));
+            }
+            mappedGrid.Clear();
+            mappedGrid = newMappedGrid;
+        }
+
+        private void MovegridRows()
+        {
+
+        }
+
+        private string GetFolderName(int rowIndex, int columnIndex)
+        {
+            string columnStr = columnIndex.ToString("D3");
+            string rowStr = rowIndex.ToString("D3");
+            return columnStr + rowStr;
         }
     }
 }
