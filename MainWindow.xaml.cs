@@ -12,12 +12,13 @@ namespace MapTool1
 {
     public partial class MainWindow : Window
     {
-        private int rows = 0; // Initial number of rows
-        private int columns = 0; // Initial number of columns
+        private int rows = 0;
+        private int columns = 0;
         private double cellSize;
         private double xOffset;
         private double yOffset;
-        private Dictionary<Tuple<int, int>, Tuple<string,string>> mappedGrid = new Dictionary<Tuple<int, int>, Tuple<string, string>>();
+        private Dictionary<Tuple<int, int>, Tuple<string, string, bool>> mappedGrid = new Dictionary<Tuple<int, int>, Tuple<string, string, bool>>();
+        private bool resized;
         public MainWindow()
         {
             InitializeComponent();
@@ -46,7 +47,7 @@ namespace MapTool1
                 {
                     for (int col = 0; col < columns; col++)
                     {
-                        var cell = new Rectangle
+                        Rectangle cell = new Rectangle
                         {
                             Width = cellSize,
                             Height = cellSize,
@@ -54,31 +55,31 @@ namespace MapTool1
                             Stroke = Brushes.Black,
                             StrokeThickness = 1
                         };
-                        
-                        Canvas.SetLeft(cell, xOffset + col * cellSize);
-                        Canvas.SetTop(cell, yOffset + row * cellSize);
+
+                        Canvas.SetLeft(cell, xOffset + (col * cellSize));
+                        Canvas.SetTop(cell, yOffset + (row * cellSize));
 
                         Tuple<int, int> key = new Tuple<int, int>(row, col);
-                        if (mappedGrid.TryGetValue(key, out Tuple<string, string> value))
+                        if (mappedGrid.TryGetValue(key, out Tuple<string, string, bool> value))
                         {
-                            if (value.Item1 == value.Item2)
+                            if (value.Item3)
                             {
-                                cell.Uid = value.Item1;
+                                cell.Uid = resized ? string.Format("{0} ({1})", value.Item2, value.Item1) : value.Item2;
+                                cell.Fill = Brushes.LightGray;
                             }
                             else
                             {
-                                cell.Uid = string.Format("{0} ({1})",value.Item2,value.Item1);
+                                cell.Uid = value.Item2;
+                                cell.Fill = Brushes.White;
                             }
-                            
-                            cell.Fill = Brushes.LightGray;
                             cell.MouseEnter += Cell_MouseEnter;
                         }
-                        canvas.Children.Add(cell);
+                        _ = canvas.Children.Add(cell);
                     }
                 }
 
                 // Draw additional row buttons
-                var buttonBeforeFirstRow = new Button()
+                Button buttonBeforeFirstRow = new Button()
                 {
                     Width = cellSize * columns - 20,
                     Height = 20,
@@ -89,11 +90,12 @@ namespace MapTool1
                     HorizontalContentAlignment = HorizontalAlignment.Center,
                     VerticalContentAlignment = VerticalAlignment.Center
                 };
+                buttonBeforeFirstRow.Click += FirstRowButton_Click;
                 Canvas.SetLeft(buttonBeforeFirstRow, xOffset + 20);
                 Canvas.SetTop(buttonBeforeFirstRow, yOffset - 20);
-                canvas.Children.Add(buttonBeforeFirstRow);
+                _ = canvas.Children.Add(buttonBeforeFirstRow);
 
-                var buttonAfterLastRow = new Button()
+                Button buttonAfterLastRow = new Button()
                 {
                     Width = cellSize * columns - 20,
                     Height = 20,
@@ -104,12 +106,13 @@ namespace MapTool1
                     HorizontalContentAlignment = HorizontalAlignment.Center,
                     VerticalContentAlignment = VerticalAlignment.Center
                 };
+                buttonAfterLastRow.Click += LastRowButton_Click;
                 Canvas.SetLeft(buttonAfterLastRow, xOffset + 20);
                 Canvas.SetTop(buttonAfterLastRow, yOffset + (rows * cellSize));
-                canvas.Children.Add(buttonAfterLastRow);
+                _ = canvas.Children.Add(buttonAfterLastRow);
 
                 // Draw additional column buttons
-                var buttonFirstColumn = new Button()
+                Button buttonFirstColumn = new Button()
                 {
                     Width = 20,
                     Height = cellSize * rows,
@@ -123,9 +126,9 @@ namespace MapTool1
                 buttonFirstColumn.Click += FirstColumnButton_Click;
                 Canvas.SetLeft(buttonFirstColumn, xOffset);
                 Canvas.SetTop(buttonFirstColumn, yOffset);
-                canvas.Children.Add(buttonFirstColumn);
+                _ = canvas.Children.Add(buttonFirstColumn);
 
-                var buttonLastColumn = new Button()
+                Button buttonLastColumn = new Button()
                 {
                     Width = 20,
                     Height = cellSize * rows,
@@ -139,18 +142,19 @@ namespace MapTool1
                 buttonLastColumn.Click += LastColumnButton_Click;
                 Canvas.SetLeft(buttonLastColumn, xOffset + (columns * cellSize));
                 Canvas.SetTop(buttonLastColumn, yOffset);
-                canvas.Children.Add(buttonLastColumn);
+                _ = canvas.Children.Add(buttonLastColumn);
             }
         }
 
         private void Cell_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
         {
             Rectangle s = (Rectangle)sender;
-            ToolTip cellToolTip = new ToolTip();
-            cellToolTip.Content = s.Uid;
-            cellToolTip.Placement = System.Windows.Controls.Primitives.PlacementMode.Center;
+            ToolTip cellToolTip = new ToolTip
+            {
+                Content = s.Uid,
+                Placement = System.Windows.Controls.Primitives.PlacementMode.Center
+            };
             s.ToolTip = cellToolTip;
-            
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -165,12 +169,16 @@ namespace MapTool1
 
         private void FirstRowButton_Click(object sender, RoutedEventArgs e)
         {
-            // Handle first row button click event
+            rows++;
+            MoveGridRows();
+            DrawGrid(rows, columns);
         }
 
         private void LastRowButton_Click(object sender, RoutedEventArgs e)
         {
-            // Handle last row button click event
+            rows++;
+            AttachAddedRows(false);
+            DrawGrid(rows, columns);
         }
 
         private void FirstColumnButton_Click(object sender, RoutedEventArgs e)
@@ -183,33 +191,35 @@ namespace MapTool1
         private void LastColumnButton_Click(object sender, RoutedEventArgs e)
         {
             columns++;
+            AttachedAddedColumn(false);
             DrawGrid(rows, columns);
         }
 
         private void MenuItemOpen_Click(object sender, RoutedEventArgs e)
         {
-            var dlg = new CommonOpenFileDialog();
-            dlg.Title = "My Title";
-            dlg.IsFolderPicker = true;
-            dlg.InitialDirectory = "C:\\Users";
-
-            dlg.AddToMostRecentlyUsedList = false;
-            dlg.AllowNonFileSystemItems = false;
-            dlg.DefaultDirectory = "C:\\Users";
-            dlg.EnsureFileExists = true;
-            dlg.EnsurePathExists = true;
-            dlg.EnsureReadOnly = false;
-            dlg.EnsureValidNames = true;
-            dlg.Multiselect = false;
-            dlg.ShowPlacesList = true;
+            resized = false;
+            CommonOpenFileDialog dlg = new CommonOpenFileDialog
+            {
+                IsFolderPicker = true,
+                InitialDirectory = "C:\\Users",
+                AddToMostRecentlyUsedList = false,
+                AllowNonFileSystemItems = false,
+                DefaultDirectory = "C:\\Users",
+                EnsureFileExists = true,
+                EnsurePathExists = true,
+                EnsureReadOnly = false,
+                EnsureValidNames = true,
+                Multiselect = false,
+                ShowPlacesList = true
+            };
 
             if (dlg.ShowDialog() == CommonFileDialogResult.Ok)
             {
                 mappedGrid.Clear();
-                var folder = dlg.FileName;
-                var directories = Directory.GetDirectories(folder);
+                string folder = dlg.FileName;
+                string[] directories = Directory.GetDirectories(folder);
                 List<string> cleanedNamesList = new List<string>();
-                foreach (var directory in directories)
+                foreach (string directory in directories)
                 {
                     cleanedNamesList.Add(directory.Substring(directory.LastIndexOf('\\') + 1));
                 }
@@ -229,7 +239,7 @@ namespace MapTool1
                         maxColumnIndex = Math.Max(maxColumnIndex, columnIndex);
                         maxRowIndex = Math.Max(maxRowIndex, rowIndex);
 
-                        mappedGrid.Add(Tuple.Create(rowIndex, columnIndex), Tuple.Create(element,element));
+                        mappedGrid.Add(Tuple.Create(rowIndex, columnIndex), Tuple.Create(element, element, true));
                     }
                 }
                 columns = maxColumnIndex + 1;
@@ -238,21 +248,45 @@ namespace MapTool1
             }
         }
 
+        private void MenuItemSave_Click(object sender, RoutedEventArgs e)
+        {
+
+        }
+
         private void MoveGridColumns()
         {
-            Dictionary<Tuple<int, int>, Tuple<string,string>> newMappedGrid = new Dictionary<Tuple<int, int>, Tuple<string, string>>();
+            if (!resized)
+            {
+                resized = true;
+            }
+            Dictionary<Tuple<int, int>, Tuple<string,string,bool>> newMappedGrid = new Dictionary<Tuple<int, int>, Tuple<string, string,bool>>();
             foreach (Tuple<int, int> key in mappedGrid.Keys)
             {
-                mappedGrid.TryGetValue(key, out Tuple<string,string> value);
-                newMappedGrid.Add(Tuple.Create(key.Item1, key.Item2 + 1), Tuple.Create(value.Item1, GetFolderName(key.Item1,key.Item2 + 1)));
+                _ = mappedGrid.TryGetValue(key, out Tuple<string, string, bool> value);
+                newMappedGrid.Add(Tuple.Create(key.Item1, key.Item2 + 1), Tuple.Create(value.Item1, GetFolderName(key.Item1, key.Item2 + 1), value.Item3));
             }
             mappedGrid.Clear();
             mappedGrid = newMappedGrid;
+            //add new columns to mapped grid
+            AttachAddedRows(true);
         }
 
-        private void MovegridRows()
+        private void MoveGridRows()
         {
-
+            if (!resized)
+            {
+                resized = true;
+            }
+            Dictionary<Tuple<int, int>, Tuple<string, string, bool>> newMappedGrid = new Dictionary<Tuple<int, int>, Tuple<string, string, bool>>();
+            foreach (Tuple<int, int> key in mappedGrid.Keys)
+            {
+                _ = mappedGrid.TryGetValue(key, out Tuple<string, string, bool> value);
+                newMappedGrid.Add(Tuple.Create(key.Item1 + 1, key.Item2), Tuple.Create(value.Item1, GetFolderName(key.Item1 + 1, key.Item2), value.Item3));
+            }
+            mappedGrid.Clear();
+            mappedGrid = newMappedGrid;
+            //add new rows to mapped grid
+            AttachedAddedColumn(true);
         }
 
         private string GetFolderName(int rowIndex, int columnIndex)
@@ -260,6 +294,44 @@ namespace MapTool1
             string columnStr = columnIndex.ToString("D3");
             string rowStr = rowIndex.ToString("D3");
             return columnStr + rowStr;
+        }
+
+        private void AttachAddedRows(bool infront)
+        {
+            if (infront)
+            {
+                for (int row = rows - 1; row >= 0; row--)
+                {
+                    mappedGrid.Add(Tuple.Create(row, 0), Tuple.Create(GetFolderName(row, 0), GetFolderName(row, 0), false));
+                }
+            }
+            else
+            {
+                for (int column = columns - 1; column >= 0; column--)
+                {
+                    mappedGrid.Add(Tuple.Create(rows - 1, column), Tuple.Create(GetFolderName(rows - 1, column), GetFolderName(rows - 1, column), false));
+                }
+            }
+            
+        }
+
+        private void AttachedAddedColumn(bool infront)
+        {
+            if (infront)
+            {
+                for (int column = columns - 1; column >= 0; column--)
+                {
+                    mappedGrid.Add(Tuple.Create(0, column), Tuple.Create(GetFolderName(0, column), GetFolderName(0, column), false));
+                }
+            }
+            else
+            {
+                for (int row = rows - 1; row >= 0; row--)
+                {
+                    mappedGrid.Add(Tuple.Create(row, columns - 1), Tuple.Create(GetFolderName(row, columns - 1), GetFolderName(row, columns - 1), false));
+                }
+                
+            }
         }
     }
 }

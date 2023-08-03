@@ -6,11 +6,18 @@
         <DockPanel>
             <Menu DockPanel.Dock="Top">
                 <MenuItem Header="_File">
-                    <MenuItem Header="_Open" Click="MenuItemOpen_Click"/>
-                    <MenuItem Header="_Save" />
+                    <MenuItem Header="_Open" Click="MenuItemOpen_Click">
+                        <MenuItem.Icon>
+                            <Image Source="open.png"/>
+                        </MenuItem.Icon>
+                    </MenuItem>
+                    <MenuItem Header="_Save" Click="MenuItemSave_Click">
+                        <MenuItem.Icon>
+                            <Image Source="save.png"/>
+                        </MenuItem.Icon>
+                    </MenuItem>
                 </MenuItem>
             </Menu>
-            <TextBox AcceptsReturn="True" />
         </DockPanel>
         <Canvas x:Name="canvas">
 
