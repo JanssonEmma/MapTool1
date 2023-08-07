@@ -19,6 +19,12 @@ namespace MapTool1
         private double yOffset;
         private Dictionary<Tuple<int, int>, Tuple<string, string, bool>> mappedGrid = new Dictionary<Tuple<int, int>, Tuple<string, string, bool>>();
         private bool resized;
+        private string mapDirectory;
+        private string settingsFilePath;
+        private string[] settingsFileContent;
+        private bool changesSaved = false;
+        private bool mapDimensionsChanged = false;
+
         public MainWindow()
         {
             InitializeComponent();
@@ -172,6 +178,7 @@ namespace MapTool1
             rows++;
             MoveGridRows();
             DrawGrid(rows, columns);
+            mapDimensionsChanged = true;
         }
 
         private void LastRowButton_Click(object sender, RoutedEventArgs e)
@@ -179,6 +186,7 @@ namespace MapTool1
             rows++;
             AttachAddedRows(false);
             DrawGrid(rows, columns);
+            mapDimensionsChanged = true;
         }
 
         private void FirstColumnButton_Click(object sender, RoutedEventArgs e)
@@ -186,6 +194,7 @@ namespace MapTool1
             columns++;
             MoveGridColumns();
             DrawGrid(rows, columns);
+            mapDimensionsChanged = true;
         }
 
         private void LastColumnButton_Click(object sender, RoutedEventArgs e)
@@ -193,64 +202,81 @@ namespace MapTool1
             columns++;
             AttachedAddedColumn(false);
             DrawGrid(rows, columns);
+            mapDimensionsChanged = true;
         }
 
         private void MenuItemOpen_Click(object sender, RoutedEventArgs e)
         {
-            resized = false;
-            CommonOpenFileDialog dlg = new CommonOpenFileDialog
+            if (!ChangesSaved())
             {
-                IsFolderPicker = true,
-                InitialDirectory = "C:\\Users",
-                AddToMostRecentlyUsedList = false,
-                AllowNonFileSystemItems = false,
-                DefaultDirectory = "C:\\Users",
-                EnsureFileExists = true,
-                EnsurePathExists = true,
-                EnsureReadOnly = false,
-                EnsureValidNames = true,
-                Multiselect = false,
-                ShowPlacesList = true
-            };
-
-            if (dlg.ShowDialog() == CommonFileDialogResult.Ok)
-            {
-                mappedGrid.Clear();
-                string folder = dlg.FileName;
-                string[] directories = Directory.GetDirectories(folder);
-                List<string> cleanedNamesList = new List<string>();
-                foreach (string directory in directories)
+                mapDimensionsChanged = false;
+                changesSaved = false;
+                resized = false;
+                CommonOpenFileDialog dlg = new CommonOpenFileDialog
                 {
-                    cleanedNamesList.Add(directory.Substring(directory.LastIndexOf('\\') + 1));
-                }
-                string[] searchObjects = cleanedNamesList.ToArray();
-                int maxColumnIndex = 0;
-                int maxRowIndex = 0;
-                foreach (string element in searchObjects)
-                {
-                    string pattern = @"^(\d{3})(\d{3})$";
-                    Match match = Regex.Match(element, pattern);
+                    IsFolderPicker = true,
+                    InitialDirectory = "C:\\Users",
+                    AddToMostRecentlyUsedList = false,
+                    AllowNonFileSystemItems = false,
+                    DefaultDirectory = "C:\\Users",
+                    EnsureFileExists = true,
+                    EnsurePathExists = true,
+                    EnsureReadOnly = false,
+                    EnsureValidNames = true,
+                    Multiselect = false,
+                    ShowPlacesList = true
+                };
 
-                    if (match.Success)
+                if (dlg.ShowDialog() == CommonFileDialogResult.Ok)
+                {
+                    mappedGrid.Clear();
+                    mapDirectory = dlg.FileName;
+                    Title = string.Format("{0} - {1}", Title, mapDirectory.Substring(mapDirectory.LastIndexOf('\\') + 1));
+                    //Get and remember settings file
+                    settingsFilePath = System.IO.Path.Combine(mapDirectory, "setting.txt");
+                    settingsFileContent = File.ReadAllLines(settingsFilePath);
+                    string[] directories = Directory.GetDirectories(mapDirectory);
+                    List<string> cleanedNamesList = new List<string>();
+                    foreach (string directory in directories)
                     {
-                        int columnIndex = int.Parse(match.Groups[1].Value);
-                        int rowIndex = int.Parse(match.Groups[2].Value);
-
-                        maxColumnIndex = Math.Max(maxColumnIndex, columnIndex);
-                        maxRowIndex = Math.Max(maxRowIndex, rowIndex);
-
-                        mappedGrid.Add(Tuple.Create(rowIndex, columnIndex), Tuple.Create(element, element, true));
+                        cleanedNamesList.Add(directory.Substring(directory.LastIndexOf('\\') + 1));
                     }
+                    string[] searchObjects = cleanedNamesList.ToArray();
+                    int maxColumnIndex = 0;
+                    int maxRowIndex = 0;
+                    foreach (string element in searchObjects)
+                    {
+                        string pattern = @"^(\d{3})(\d{3})$";
+                        Match match = Regex.Match(element, pattern);
+
+                        if (match.Success)
+                        {
+                            int columnIndex = int.Parse(match.Groups[1].Value);
+                            int rowIndex = int.Parse(match.Groups[2].Value);
+
+                            maxColumnIndex = Math.Max(maxColumnIndex, columnIndex);
+                            maxRowIndex = Math.Max(maxRowIndex, rowIndex);
+
+                            mappedGrid.Add(Tuple.Create(rowIndex, columnIndex), Tuple.Create(element, element, true));
+                        }
+                    }
+                    columns = maxColumnIndex + 1;
+                    rows = maxRowIndex + 1;
+                    DrawGrid(rows, columns);
                 }
-                columns = maxColumnIndex + 1;
-                rows = maxRowIndex + 1;
-                DrawGrid(rows, columns);
             }
+        }
+
+        private void MainWindow_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            throw new NotImplementedException();
         }
 
         private void MenuItemSave_Click(object sender, RoutedEventArgs e)
         {
-
+            UpdateSettings();
+            UpdateDirectories();
+            changesSaved = true;
         }
 
         private void MoveGridColumns()
@@ -259,7 +285,7 @@ namespace MapTool1
             {
                 resized = true;
             }
-            Dictionary<Tuple<int, int>, Tuple<string,string,bool>> newMappedGrid = new Dictionary<Tuple<int, int>, Tuple<string, string,bool>>();
+            Dictionary<Tuple<int, int>, Tuple<string, string, bool>> newMappedGrid = new Dictionary<Tuple<int, int>, Tuple<string, string, bool>>();
             foreach (Tuple<int, int> key in mappedGrid.Keys)
             {
                 _ = mappedGrid.TryGetValue(key, out Tuple<string, string, bool> value);
@@ -312,7 +338,7 @@ namespace MapTool1
                     mappedGrid.Add(Tuple.Create(rows - 1, column), Tuple.Create(GetFolderName(rows - 1, column), GetFolderName(rows - 1, column), false));
                 }
             }
-            
+
         }
 
         private void AttachedAddedColumn(bool infront)
@@ -330,8 +356,134 @@ namespace MapTool1
                 {
                     mappedGrid.Add(Tuple.Create(row, columns - 1), Tuple.Create(GetFolderName(row, columns - 1), GetFolderName(row, columns - 1), false));
                 }
-                
+
             }
+        }
+
+        private void UpdateSettings()
+        {
+            for (int i = 0; i < settingsFileContent.Length; i++)
+            {
+                string[] parts = settingsFileContent[i].Split(new char[] { '\t', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+
+                if (parts.Length > 0 && parts[0] == "MapSize")
+                {
+                    if (parts.Length >= 3 && int.TryParse(parts[1], out _) && int.TryParse(parts[2], out _))
+                    {
+                        parts[1] = columns.ToString();
+                        parts[2] = rows.ToString();
+
+                        settingsFileContent[i] = string.Join("\t", parts);
+                    }
+                    else
+                    {
+                        _ = MessageBox.Show("Error parsing MapSize values.");
+                    }
+                    break;
+                }
+            }
+            File.WriteAllLines(settingsFilePath, settingsFileContent);
+        }
+
+        private void UpdateDirectories()
+        {
+            for (int row = rows - 1; row >= 0; row--)
+            {
+                for (int column = columns - 1; column >= 0; column--)
+                {
+                    Tuple<int, int> key = new Tuple<int, int>(row, column);
+                    if (mappedGrid.TryGetValue(key, out Tuple<string, string, bool> value))
+                    {
+                        if (value.Item3)
+                        {
+                            if (value.Item1 != value.Item2)
+                            {
+                                UpdateBaseGridDirectories(value.Item1, value.Item2);
+                            }
+                        }
+                        else
+                        {
+                            CreateNewGridDirectoriesWithTemplate(value.Item2);
+                        }
+                    }
+                }
+            }
+        }
+        private void UpdateBaseGridDirectories(string originalName, string newName)
+        {
+            Directory.Move(System.IO.Path.Combine(mapDirectory, originalName), System.IO.Path.Combine(mapDirectory, newName));
+        }
+
+        private void CreateNewGridDirectoriesWithTemplate(string name)
+        {
+            string[] resourceFiles = {
+                "AreaAmbienceData.txt",
+                "AreaData.txt",
+                "AreaProperty.txt",
+                "attr.atr",
+                "height.raw",
+                "minimap.dds",
+                "shadowmap.dds",
+                "shadowmap.raw",
+                "tile.raw",
+                "water.wtr"
+            };
+            DirectoryInfo directoryInfo = Directory.CreateDirectory(System.IO.Path.Combine(mapDirectory, name));
+            foreach (string file in resourceFiles)
+            {
+                FileStream fs = File.Create(System.IO.Path.Combine(directoryInfo.FullName, file));
+                fs.Close();
+                switch (file)
+                {
+                    case "AreaAmbienceData.txt":
+                        File.WriteAllText(fs.Name, Properties.Resources.AreaAmbienceData);
+                        break;
+                    case "AreaData.txt":
+                        File.WriteAllText(fs.Name, Properties.Resources.AreaData);
+                        break;
+                    case "AreaProperty.txt":
+                        File.WriteAllText(fs.Name, Properties.Resources.AreaProperty);
+                        break;
+                    case "attr.atr":
+                        File.WriteAllBytes(fs.Name, Properties.Resources.attr);
+                        break;
+                    case "height.raw":
+                        File.WriteAllBytes(fs.Name, Properties.Resources.height);
+                        break;
+                    case "minimap.dds":
+                        File.WriteAllBytes(fs.Name, Properties.Resources.minimap);
+                        break;
+                    case "shadowmap.dds":
+                        File.WriteAllBytes(fs.Name, Properties.Resources.shadowmap);
+                        break;
+                    case "shadowmap.raw":
+                        File.WriteAllBytes(fs.Name, Properties.Resources.shadowmap1);
+                        break;
+                    case "tile.raw":
+                        File.WriteAllBytes(fs.Name, Properties.Resources.tile);
+                        break;
+                    case "water.wtr":
+                        File.WriteAllBytes(fs.Name, Properties.Resources.water);
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+
+        private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            e.Cancel = ChangesSaved();
+        }
+
+        private bool ChangesSaved()
+        {
+            if (mapDimensionsChanged && !changesSaved)
+            {
+                MessageBoxResult res = MessageBox.Show(string.Format("You have unsaved changes to the map:\n\n{0}\n\nDo you want to continue?", mapDirectory.Substring(mapDirectory.LastIndexOf('\\') + 1)), "Configuration", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                return res != MessageBoxResult.Yes;
+            }
+            return false;
         }
     }
 }

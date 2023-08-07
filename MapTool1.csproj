@@ -82,6 +82,10 @@
       <DependentUpon>MainWindow.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
+    <Page Include="Resources.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs">
@@ -106,18 +110,29 @@
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
     </None>
+    <EmbeddedResource Include="resources\gridTemplate\attr.atr" />
+    <EmbeddedResource Include="resources\gridTemplate\water.wtr" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="data\" />
+    <EmbeddedResource Include="resources\gridTemplate\shadowmap.dds" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="save.png" />
+    <EmbeddedResource Include="resources\save.png" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="open.png" />
+    <EmbeddedResource Include="resources\open.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="resources\gridTemplate\AreaAmbienceData.txt" />
+    <EmbeddedResource Include="resources\gridTemplate\AreaData.txt" />
+    <EmbeddedResource Include="resources\gridTemplate\AreaProperty.txt" />
+    <EmbeddedResource Include="resources\gridTemplate\height.raw" />
+    <EmbeddedResource Include="resources\gridTemplate\minimap.dds" />
+    <EmbeddedResource Include="resources\gridTemplate\shadowmap.raw" />
+    <EmbeddedResource Include="resources\gridTemplate\tile.raw" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
