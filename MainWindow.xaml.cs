@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Windows;
@@ -323,6 +324,13 @@ namespace MapTool1
             return columnStr + rowStr;
         }
 
+        private Tuple<int, int> GetXYFromFoldername(string dir)
+        {
+            int x = int.Parse(dir.Substring(0, 3));
+            int y = int.Parse(dir.Substring(3));
+            return Tuple.Create(x,y);
+        }
+
         private void AttachAddedRows(bool infront)
         {
             if (infront)
@@ -400,6 +408,8 @@ namespace MapTool1
                             if (value.Item1 != value.Item2)
                             {
                                 UpdateBaseGridDirectories(value.Item1, value.Item2);
+                                UpdateAreaData(value.Item2);
+                                UpdateAreaAmbienceData(value.Item2);
                             }
                         }
                         else
@@ -409,6 +419,7 @@ namespace MapTool1
                     }
                 }
             }
+            MessageBox.Show("Map saved.");
         }
         private void UpdateBaseGridDirectories(string originalName, string newName)
         {
@@ -485,6 +496,246 @@ namespace MapTool1
                 return res != MessageBoxResult.Yes;
             }
             return false;
+        }
+
+        private void UpdateAreaData(string dir)
+        {
+            string areadataPath = System.IO.Path.Combine(mapDirectory, dir, "areadata.txt");
+            string tempAreadataPath = System.IO.Path.Combine(mapDirectory, dir, "tempareadata.txt");
+
+            if (File.Exists(areadataPath))
+            {
+                try
+                {
+                    List<Tuple<double, double, double>> objectCoordinates = new List<Tuple<double, double, double>>();
+                    List<Tuple<double, double, double>> newObjectCoordinates = new List<Tuple<double, double, double>>();
+                    using (StreamReader reader = new StreamReader(areadataPath))
+                    {
+                        string line;
+                        string objectName = null;
+                        double x = 0, y = 0, z = 0, xNew = 0, yNew = 0, zNew = 0;
+                        bool objectHandled = false;
+
+                        while ((line = reader.ReadLine()) != null)
+                        {
+                            if (line.StartsWith("Start"))
+                            {
+                                objectName = line.Substring(6); //"Start" + whitespace char
+                            }
+                            else if (line.StartsWith("End Object") && objectName != null)
+                            {
+                                //End of object block, add the coordinates to the list
+                                objectCoordinates.Add(new Tuple<double, double, double>(x, y, z));
+                                newObjectCoordinates.Add(new Tuple<double, double, double>(xNew, yNew, zNew));
+                                objectName = null; //Reset objectName
+                                objectHandled = false; //Reset objectHandled
+                            }
+                            else if (objectName != null && !objectHandled)
+                            {
+                                // Parse x, y, z coordinates from the line
+                                line = line.Trim();
+                                string[] parts = line.Split(' ');
+                                if (parts.Length == 3 &&
+                                    double.TryParse(parts[0], NumberStyles.Any, CultureInfo.GetCultureInfo("en-US"), out x) &&
+                                    double.TryParse(parts[1], NumberStyles.Any, CultureInfo.GetCultureInfo("en-US"), out y) &&
+                                    double.TryParse(parts[2], NumberStyles.Any, CultureInfo.GetCultureInfo("en-US"), out z))
+                                {
+                                    objectHandled = true;
+                                    //recalc x,y,z for updated grid
+                                    Tuple<int, int> chunkPos = GetXYFromFoldername(dir);
+                                    if (chunkPos.Item1 == 0)
+                                        xNew = x;
+                                    else
+                                        xNew = x + (chunkPos.Item1 * 25600);
+
+                                    if (chunkPos.Item2 == 0)
+                                        yNew = y;
+                                    else
+                                        yNew = y + (chunkPos.Item2 * 25600);
+                                    zNew = z;
+                                }
+                                else
+                                {
+                                    _ = MessageBox.Show("Error parsing the coordinates. Try again or report as bug.");
+                                }
+                            }
+                        }
+                        reader.Close();
+                    }
+                    //Update coordinates of objects
+                    if (objectCoordinates.Count == newObjectCoordinates.Count)
+                    {
+                        //Create a temporary copy of the file
+                        File.Copy(areadataPath, tempAreadataPath, true);
+
+                        using(StreamWriter writer = new StreamWriter(areadataPath, false, System.Text.Encoding.UTF8))
+                        {
+                            using (StreamReader reader = new StreamReader(tempAreadataPath))
+                            {
+                                string line;
+                                int objectIndex = 0;
+                                string xValue, yValue, zValue = "";
+                                bool coordinatesInNextLine = false;
+
+                                while ((line = reader.ReadLine()) != null)
+                                {
+                                    if (line.StartsWith("Start Object"))
+                                    {
+                                        // Write the updated coordinates from 'updatedCoordinates'
+                                        writer.WriteLine(line); // Start Object line
+                                        coordinatesInNextLine = true; 
+                                    }
+                                    else
+                                    {
+                                        if (coordinatesInNextLine)
+                                        {
+                                            xValue = newObjectCoordinates[objectIndex].Item1.ToString("0.######",CultureInfo.GetCultureInfo("en-US"));
+                                            yValue = newObjectCoordinates[objectIndex].Item2.ToString("0.######", CultureInfo.GetCultureInfo("en-US"));
+                                            zValue = newObjectCoordinates[objectIndex].Item3.ToString("0.######", CultureInfo.GetCultureInfo("en-US"));
+                                            writer.WriteLine($"    {xValue} {yValue} {zValue}");
+                                            coordinatesInNextLine = false;
+                                            objectIndex++;
+                                        }
+                                        else
+                                            writer.WriteLine(line);
+                                    }
+                                }
+                                reader.Close();
+                            }
+                            writer.Close();
+                            File.Delete(tempAreadataPath);
+                        }
+                    }
+                }
+                catch (IOException e)
+                {
+                    _ = MessageBox.Show($"An error occurred while reading the file: {e.Message}");
+                }
+            }
+            else
+            {
+                _ = MessageBox.Show("The file 'areadata.txt' does not exist in the directory.");
+            }
+        }
+
+        private void UpdateAreaAmbienceData(string dir)
+        {
+            string areaambiencedataPath = System.IO.Path.Combine(mapDirectory, dir, "areaambiencedata.txt");
+            string tempAreaambiencedataPath = System.IO.Path.Combine(mapDirectory, dir, "tempareaambiencedata.txt");
+
+            if (File.Exists(areaambiencedataPath))
+            {
+                try
+                {
+                    List<Tuple<double, double, double>> objectCoordinates = new List<Tuple<double, double, double>>();
+                    List<Tuple<double, double, double>> newObjectCoordinates = new List<Tuple<double, double, double>>();
+                    using (StreamReader reader = new StreamReader(areaambiencedataPath))
+                    {
+                        string line;
+                        string objectName = null;
+                        double x = 0, y = 0, z = 0, xNew = 0, yNew = 0, zNew = 0;
+                        bool objectHandled = false;
+
+                        while ((line = reader.ReadLine()) != null)
+                        {
+                            if (line.StartsWith("Start"))
+                            {
+                                objectName = line.Substring(6); //"Start" + whitespace char
+                            }
+                            else if (line.StartsWith("End Object") && objectName != null)
+                            {
+                                //End of object block, add the coordinates to the list
+                                objectCoordinates.Add(new Tuple<double, double, double>(x, y, z));
+                                newObjectCoordinates.Add(new Tuple<double, double, double>(xNew, yNew, zNew));
+                                objectName = null; //Reset objectName
+                                objectHandled = false; //Reset objectHandled
+                            }
+                            else if (objectName != null && !objectHandled)
+                            {
+                                // Parse x, y, z coordinates from the line
+                                line = line.Trim();
+                                string[] parts = line.Split(' ');
+                                if (parts.Length == 3 &&
+                                    double.TryParse(parts[0], NumberStyles.Any, CultureInfo.GetCultureInfo("en-US"), out x) &&
+                                    double.TryParse(parts[1], NumberStyles.Any, CultureInfo.GetCultureInfo("en-US"), out y) &&
+                                    double.TryParse(parts[2], NumberStyles.Any, CultureInfo.GetCultureInfo("en-US"), out z))
+                                {
+                                    objectHandled = true;
+                                    //recalc x,y,z for updated grid
+                                    Tuple<int, int> chunkPos = GetXYFromFoldername(dir);
+                                    if (chunkPos.Item1 == 0)
+                                        xNew = x;
+                                    else
+                                        xNew = x + (chunkPos.Item1 * 25600);
+
+                                    if (chunkPos.Item2 == 0)
+                                        yNew = y;
+                                    else
+                                        yNew = y + (chunkPos.Item2 * 25600);
+                                    zNew = z;
+                                }
+                                else
+                                {
+                                    _ = MessageBox.Show("Error parsing the coordinates. Try again or report as bug.");
+                                }
+                            }
+                        }
+                        reader.Close();
+                    }
+                    //Update coordinates of objects
+                    if (objectCoordinates.Count == newObjectCoordinates.Count)
+                    {
+                        //Create a temporary copy of the file
+                        File.Copy(areaambiencedataPath, tempAreaambiencedataPath, true);
+
+                        using (StreamWriter writer = new StreamWriter(areaambiencedataPath, false, System.Text.Encoding.UTF8))
+                        {
+                            using (StreamReader reader = new StreamReader(tempAreaambiencedataPath))
+                            {
+                                string line;
+                                int objectIndex = 0;
+                                string xValue, yValue, zValue = "";
+                                bool coordinatesInNextLine = false;
+
+                                while ((line = reader.ReadLine()) != null)
+                                {
+                                    if (line.StartsWith("Start Object"))
+                                    {
+                                        // Write the updated coordinates from 'updatedCoordinates'
+                                        writer.WriteLine(line); // Start Object line
+                                        coordinatesInNextLine = true;
+                                    }
+                                    else
+                                    {
+                                        if (coordinatesInNextLine)
+                                        {
+                                            xValue = newObjectCoordinates[objectIndex].Item1.ToString("0.######", CultureInfo.GetCultureInfo("en-US"));
+                                            yValue = newObjectCoordinates[objectIndex].Item2.ToString("0.######", CultureInfo.GetCultureInfo("en-US"));
+                                            zValue = newObjectCoordinates[objectIndex].Item3.ToString("0.######", CultureInfo.GetCultureInfo("en-US"));
+                                            writer.WriteLine($"    {xValue} {yValue} {zValue}");
+                                            coordinatesInNextLine = false;
+                                            objectIndex++;
+                                        }
+                                        else
+                                            writer.WriteLine(line);
+                                    }
+                                }
+                                reader.Close();
+                            }
+                            writer.Close();
+                            File.Delete(tempAreaambiencedataPath);
+                        }
+                    }
+                }
+                catch (IOException e)
+                {
+                    _ = MessageBox.Show($"An error occurred while reading the file: {e.Message}");
+                }
+            }
+            else
+            {
+                _ = MessageBox.Show("The file 'areaambiencedata.txt' does not exist in the directory.");
+            }
         }
     }
 }
